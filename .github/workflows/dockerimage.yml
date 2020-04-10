@@ -1,0 +1,44 @@
+name: Docker Image CI
+
+on:
+  push:
+    tags:
+    - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+        - uses: actions/checkout@v1
+        - name: Extract release tag
+          shell: bash
+          run: echo "##[set-output name=tag;]$(echo ${GITHUB_REF#refs/tags/})"
+          id: extract_release_tag
+          
+        # Build and push to GitHub and 
+        - name: Login to docker.pkg.github.com
+          run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{ secrets.GH_USERNAME }} --password-stdin
+        - name: Build Docker image
+          run: docker build . --file Dockerfile --tag ${{ secrets.APP_NAME }}
+        - name : Tag Docker image with the release tag
+          run : docker tag ${{ secrets.APP_NAME }} docker.pkg.github.com/${{ secrets.GH_USERNAME }}/${{ secrets.APP_NAME }}/${{ secrets.APP_NAME }}:${{ steps.extract_release_tag.outputs.tag }}
+        - name: Push the release Docker image
+          run: docker push docker.pkg.github.com/${{ secrets.GH_USERNAME }}/${{ secrets.APP_NAME }}/${{ secrets.APP_NAME }}:${{ steps.extract_release_tag.outputs.tag }}
+        - name: Tag Docker image as latest
+          run: docker tag ${{ secrets.APP_NAME }} docker.pkg.github.com/${{ secrets.GH_USERNAME }}/${{ secrets.APP_NAME }}/${{ secrets.APP_NAME }}:latest
+        - name: Push the latest Docker image
+          run: docker push docker.pkg.github.com/${{ secrets.GH_USERNAME }}/${{ secrets.APP_NAME }}/${{ secrets.APP_NAME }}:latest
+
+        # Push to DockerHub
+        # Pushing to DockerHub is due to a bug in GitHub which requires authentication for pulling public docker images
+        # https://github.community/t5/GitHub-Actions/docker-pull-from-public-GitHub-Package-Registry-fail-with-quot/td-p/32782/page/4
+        - name: Login to docker.io
+          run: echo ${{ secrets.DH_TOKEN }} | docker login -u ${{ secrets.DH_USERNAME }} --password-stdin
+        - name : Tag Docker image with the release tag
+          run : docker tag ${{ secrets.APP_NAME }} ${{ secrets.DH_USERNAME }}/${{ secrets.APP_NAME }}:${{ steps.extract_release_tag.outputs.tag }}
+        - name: Push the release Docker image
+          run: docker push ${{ secrets.DH_USERNAME }}/${{ secrets.APP_NAME }}:${{ steps.extract_release_tag.outputs.tag }}
+        - name: Tag Docker image as latest
+          run: docker tag ${{ secrets.APP_NAME }} ${{ secrets.DH_USERNAME }}/${{ secrets.APP_NAME }}:latest
+        - name: Push the latest Docker image
+          run: docker push ${{ secrets.DH_USERNAME }}/${{ secrets.APP_NAME }}:latest
